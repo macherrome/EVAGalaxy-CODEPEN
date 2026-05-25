@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="en">
+
+  <head>
+    <meta charset="UTF-8">
+    <title>EVA Galaxy</title>
+    
+
+  </head>
+    
+  <body>
+  <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Evangelion Galaxy</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background: radial-gradient(ellipse at center, #1a0033 0%, #0a0a1a 50%, #000 100%);
+            font-family: Arial, sans-serif;
+        }
+
+        #canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        .controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            color: #bb88ff;
+            font-size: 12px;
+            background: rgba(10, 10, 26, 0.9);
+            padding: 15px;
+            border-radius: 5px;
+            z-index: 10;
+            font-family: 'Courier New', monospace;
+            text-shadow: 0 0 10px #bb88ff;
+            border: 2px solid #6600cc;
+            box-shadow: 0 0 20px rgba(136, 0, 255, 0.3);
+        }
+
+        .controls p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+
+        .stat {
+            color: #00ff00;
+            text-shadow: 0 0 10px #00ff00;
+        }
+
+        @keyframes pulse {
+            0%, 100% { text-shadow: 0 0 10px #bb88ff; }
+            50% { text-shadow: 0 0 20px #bb88ff, 0 0 30px #ff00aa; }
+        }
+
+        .pulsing {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="canvas"></canvas>
+    <div class="controls">
+        <p>✨ DARK SPARKLE GALAXY ✨</p>
+        <p>Drag to rotate</p>
+        <p>Scroll to zoom</p>
+        <p class="stat">Particles: <span id="particle-count">0</span></p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        // Center of canvas
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        // Camera/rotation variables
+        let rotationX = 0;
+        let rotationY = 0;
+        let targetRotationX = 0;
+        let targetRotationY = 0;
+        let zoom = 1;
+
+        // Mouse controls
+        let isDragging = false;
+        let lastMouseX = 0;
+        let lastMouseY = 0;
+
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging) {
+                const deltaX = e.clientX - lastMouseX;
+                const deltaY = e.clientY - lastMouseY;
+                targetRotationY += deltaX * 0.005;
+                targetRotationX += deltaY * 0.005;
+                lastMouseX = e.clientX;
+                lastMouseY = e.clientY;
+            }
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+
+        // Scroll zoom
+        document.addEventListener('wheel', (e) => {
+            e.preventDefault();
+            zoom += e.deltaY * -0.001;
+            zoom = Math.max(0.5, Math.min(2.5, zoom));
+        }, { passive: false });
+
+        // Handle resize
+        window.addEventListener('resize', () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        });
+
+        // ==================== BACKGROUND STARS ====================
+        class BackgroundStar {
+            constructor() {
+                this.x = Math.random() * canvas.width;
+                this.y = Math.random() * canvas.height;
+                this.size = Math.random() * 1.5 + 0.3;
+                this.opacity = Math.random() * 0.6 + 0.4;
+                this.twinkleSpeed = Math.random() * 0.03 + 0.01;
+                this.twinklePhase = Math.random() * Math.PI * 2;
+            }
+
+            update() {
+                this.twinklePhase += this.twinkleSpeed;
+            }
+
+            draw(ctx) {
+                const twinkle = Math.sin(this.twinklePhase) * 0.5 + 0.5;
+                const currentOpacity = this.opacity * twinkle;
+                
+                // Draw star
+                ctx.fillStyle = `rgba(255, 255, 255, ${currentOpacity})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // Small glow
+                if (twinkle > 0.6) {
+                    ctx.fillStyle = `rgba(255, 255, 255, ${(twinkle - 0.6) * currentOpacity * 0.7})`;
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.size * 2.5, 0, Math.PI * 2);
+                    ctx.fill();
+                }
+            }
+        }
+
+        // 3D point class
+        class Point3D {
+            constructor(x, y, z) {
+                this.x = x;
+                this.y = y;
+                this.z = z;
+            }
+
+            rotateX(angle) {
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const y = this.y * cos - this.z * sin;
+                const z = this.y * sin + this.z * cos;
+                this.y = y;
+                this.z = z;
+                return this;
+            }
+
+            rotateY(angle) {
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const x = this.x * cos + this.z * sin;
+                const z = -this.x * sin + this.z * cos;
+                this.x = x;
+                this.z = z;
+                return this;
+            }
+
+            rotateZ(angle) {
+                const cos = Math.cos(angle);
+                const sin = Math.sin(angle);
+                const x = this.x * cos - this.y * sin;
+                const y = this.x * sin + this.y * cos;
+                this.x = x;
+                this.y = y;
+                return this;
+            }
+
+            project(distance = 500) {
+                const scale = distance / (distance + this.z);
+                return {
+                    x: this.x * scale * zoom,
+                    y: this.y * scale * zoom,
+                    z: this.z,
+                    scale
+                };
+            }
+        }
+
+        // Particle class
+        class Particle {
+            constructor() {
+                this.reset();
+            }
+
+            reset() {
+                // Spiral galaxy distribution
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * 300;
+                const spiral = angle + Math.sqrt(dist) * 0.5;
+
+                this.original = new Point3D(
+                    Math.cos(spiral) * dist,
+                    (Math.random() - 0.5) * 200,
+                    Math.sin(spiral) * dist
+                );
+
+                this.pos = new Point3D(this.original.x, this.original.y, this.original.z);
+                this.velocity = {
+                    x: (Math.random() - 0.5) * 1,
+                    y: (Math.random() - 0.5) * 1,
+                    z: (Math.random() - 0.5) * 1
+                };
+
+                // Colors: Deep purple, magenta, pink, white, cyan (all vibrant)
+                const colors = [
+                    { r: 255, g: 0, b: 255, name: 'magenta' },      // Magenta
+                    { r: 0, g: 255, b: 255, name: 'cyan' },         // Cyan
+                    { r: 255, g: 0, b: 128, name: 'hot-pink' },     // Hot pink
+                    { r: 0, g: 255, b: 136, name: 'aqua' },         // Aqua
+                    { r: 255, g: 255, b: 255, name: 'white' },      // White
+                    { r: 255, g: 100, b: 200, name: 'light-pink' }, // Light pink
+                ];
+                this.color = colors[Math.floor(Math.random() * colors.length)];
+
+                this.size = Math.random() * 3 + 1.5;
+                this.life = 1;
+                this.pulse = Math.random() * Math.PI * 2;
+                this.pulseSpeed = Math.random() * 0.05 + 0.02;
+                this.trailPoints = [];
+                this.maxTrailLength = 20;
+            }
+
+            update(time) {
+                // Orbital motion
+                this.pos.x = this.original.x + Math.sin(time * 0.003) * 10;
+                this.pos.y = this.original.y + Math.cos(time * 0.002) * 10;
+                this.pos.z = this.original.z + Math.sin(time * 0.0025) * 10;
+
+                // Pulsing life
+                this.pulse += this.pulseSpeed;
+                this.life = Math.sin(this.pulse) * 0.4 + 0.7;
+
+                // Trail
+                this.trailPoints.push({
+                    x: this.pos.x,
+                    y: this.pos.y,
+                    z: this.pos.z,
+                    life: this.life
+                });
+
+                if (this.trailPoints.length > this.maxTrailLength) {
+                    this.trailPoints.shift();
+                }
+            }
+
+            getProjected(rotX, rotY) {
+                const p = new Point3D(this.pos.x, this.pos.y, this.pos.z);
+                p.rotateX(rotX);
+                p.rotateY(rotY);
+                return p.project();
+            }
+
+            getTrailProjected(index, rotX, rotY) {
+                if (!this.trailPoints[index]) return null;
+                const point = this.trailPoints[index];
+                const p = new Point3D(point.x, point.y, point.z);
+                p.rotateX(rotX);
+                p.rotateY(rotY);
+                return p.project();
+            }
+
+            draw(ctx, rotX, rotY, centerX, centerY) {
+                const projected = this.getProjected(rotX, rotY);
+                const x = centerX + projected.x;
+                const y = centerY + projected.y;
+
+                // Draw trail
+                if (this.trailPoints.length > 1) {
+                    for (let i = 0; i < this.trailPoints.length - 1; i++) {
+                        const p1 = this.getTrailProjected(i, rotX, rotY);
+                        const p2 = this.getTrailProjected(i + 1, rotX, rotY);
+
+                        if (p1 && p2) {
+                            const x1 = centerX + p1.x;
+                            const y1 = centerY + p1.y;
+                            const x2 = centerX + p2.x;
+                            const y2 = centerY + p2.y;
+
+                            const alpha = (i / this.trailPoints.length) * this.life * 0.3;
+                            ctx.strokeStyle = `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${alpha})`;
+                            ctx.lineWidth = 1;
+                            ctx.beginPath();
+                            ctx.moveTo(x1, y1);
+                            ctx.lineTo(x2, y2);
+                            ctx.stroke();
+                        }
+                    }
+                }
+
+                // Draw glow
+                const glowSize = this.size * 4 * this.life;
+                const gradient = ctx.createRadialGradient(x, y, 0, x, y, glowSize);
+                gradient.addColorStop(0, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${0.8 * this.life})`);
+                gradient.addColorStop(0.5, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${0.3 * this.life})`);
+                gradient.addColorStop(1, `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, 0)`);
+
+                ctx.fillStyle = gradient;
+                ctx.beginPath();
+                ctx.arc(x, y, glowSize, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw core
+                ctx.fillStyle = `rgba(${this.color.r}, ${this.color.g}, ${this.color.b}, ${this.life})`;
+                ctx.beginPath();
+                ctx.arc(x, y, this.size * this.life, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Draw bright center
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.life * 0.6})`;
+                ctx.beginPath();
+                ctx.arc(x, y, this.size * 0.4 * this.life, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // Create background stars
+        const backgroundStars = [];
+        for (let i = 0; i < 2500; i++) {
+            backgroundStars.push(new BackgroundStar());
+        }
+
+        // Create particles
+        const particles = [];
+        const particleCount = 500;
+
+        for (let i = 0; i < particleCount; i++) {
+            particles.push(new Particle());
+        }
+
+        // Draw connecting lines (dark purple, white, pink)
+        function drawConnections(rotX, rotY, centerX, centerY) {
+            const maxDistance = 150;
+            const lineColors = [
+                { r: 102, g: 0, b: 204 },    // Dark purple
+                { r: 255, g: 255, b: 255 },  // White
+                { r: 255, g: 0, b: 153 }     // Pink
+            ];
+
+            for (let i = 0; i < particles.length; i += 5) { // Sample every 5th particle for performance
+                for (let j = i + 1; j < Math.min(i + 30, particles.length); j++) {
+                    const p1 = particles[i].getProjected(rotX, rotY);
+                    const p2 = particles[j].getProjected(rotX, rotY);
+
+                    const dx = p1.x - p2.x;
+                    const dy = p1.y - p2.y;
+                    const distance = Math.sqrt(dx * dx + dy * dy);
+
+                    if (distance < maxDistance && distance > 0) {
+                        const opacity = (1 - distance / maxDistance) * 0.5;
+                        const color = lineColors[Math.floor(Math.random() * lineColors.length)];
+
+                        ctx.strokeStyle = `rgba(${color.r}, ${color.g}, ${color.b}, ${opacity})`;
+                        ctx.lineWidth = 0.5;
+                        ctx.beginPath();
+                        ctx.moveTo(centerX + p1.x, centerY + p1.y);
+                        ctx.lineTo(centerX + p2.x, centerY + p2.y);
+                        ctx.stroke();
+                    }
+                }
+            }
+        }
+
+        // Animation loop
+        let time = 0;
+        function animate() {
+            // Clear with fade
+            ctx.fillStyle = 'rgba(10, 10, 26, 0.1)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Draw background stars
+            backgroundStars.forEach(star => {
+                star.update();
+                star.draw(ctx);
+            });
+
+            // Smooth rotation
+            rotationX += (targetRotationX - rotationX) * 0.1;
+            rotationY += (targetRotationY - rotationY) * 0.1;
+
+            // Update particles
+            particles.forEach(particle => {
+                particle.update(time);
+            });
+
+            // Sort by depth (painter's algorithm)
+            particles.sort((a, b) => {
+                return a.pos.z - b.pos.z;
+            });
+
+            // Draw connections
+            drawConnections(rotationX, rotationY, centerX, centerY);
+
+            // Draw particles
+            particles.forEach(particle => {
+                particle.draw(ctx, rotationX, rotationY, centerX, centerY);
+            });
+
+            // Update particle count
+            document.getElementById('particle-count').textContent = particleCount;
+
+            time++;
+            requestAnimationFrame(animate);
+        }
+
+        animate();
+    </script>
+</body>
+</html>
+    
+  </body>
+  
+</html>
